@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crate Rush</title>
+<style>
+:root{--bg:#10131c;--panel:#1a1f2e;--line:#2b3247;--text:#e8ecf5;--dim:#8d96ad;
+--common:#9aa3b5;--uncommon:#4fc36b;--rare:#3f8cff;--epic:#a54dff;--legendary:#ffb020;--godly:#ff3d5a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Trebuchet MS",Verdana,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px}
+h1{margin:0;font-size:1.4rem;letter-spacing:.5px}
+.coins{font-size:1.2rem;font-weight:bold;color:var(--legendary)}
+button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:10px 16px;background:var(--rare);color:#fff;font-weight:bold}
+button:hover{filter:brightness(1.15)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.ghost{background:var(--line)}
+main{max-width:960px;margin:0 auto;padding:20px}
+.boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.box{background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:16px;text-align:center}
+.box.sel{border-color:var(--c)}
+.box .ico{font-size:3rem}
+.box h3{margin:6px 0 2px}
+.box small{color:var(--dim)}
+.odds{font-size:.78rem;color:var(--dim);margin:8px 0}
+#stage{margin:22px 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center}
+#view{position:relative;overflow:hidden;height:130px;border-radius:8px;background:#0b0d14}
+#view::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:3px;margin-left:-1.5px;background:#fff;box-shadow:0 0 10px #fff;z-index:2}
+#strip{display:flex;gap:8px;padding:8px;position:absolute;left:0;top:0;will-change:transform}
+.it{flex:0 0 120px;height:114px;border-radius:8px;background:var(--panel);border-bottom:5px solid var(--c);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.8rem}
+.it span{font-size:2.2rem}
+#result{min-height:48px;margin-top:12px;font-size:1.1rem}
+h2{margin:26px 0 10px;font-size:1.1rem}
+#inv{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.inv{background:var(--panel);border-radius:8px;border-bottom:5px solid var(--c);padding:10px;text-align:center;font-size:.8rem}
+.inv span{font-size:2rem;display:block}
+.inv button{margin-top:6px;padding:4px 8px;font-size:.75rem}
+#boxanim{display:none;font-size:5rem;height:130px;line-height:130px}
+#boxanim.on{display:block;animation:shake .5s ease-in-out infinite}
+@keyframes shake{0%,100%{transform:rotate(0)}20%{transform:rotate(-14deg) scale(1.1)}40%{transform:rotate(12deg) scale(1.15)}60%{transform:rotate(-10deg) scale(1.2)}80%{transform:rotate(8deg) scale(1.1)}}
+.it.dim{opacity:.3;transition:opacity .4s}
+.it.pass{transform:scale(1.08);transition:transform .08s}
+.it.win{animation:winpulse .7s ease-in-out 3;border-color:var(--c)}
+@keyframes winpulse{50%{transform:scale(1.15);box-shadow:0 0 28px var(--c)}}
+#reveal{position:fixed;inset:0;background:rgba(5,7,12,.88);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:10;text-align:center}
+#reveal.on{display:flex}
+#reveal .big{font-size:8rem;animation:pop .6s cubic-bezier(.2,1.6,.4,1);filter:drop-shadow(0 0 30px var(--c))}
+#reveal .glow{position:absolute;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,var(--c) 0%,transparent 65%);opacity:.45;animation:spin 6s linear infinite}
+#reveal .rar{font-size:1.6rem;font-weight:bold;color:var(--c);margin-top:6px;z-index:1}
+#reveal .nm{font-size:1.1rem;margin:4px 0 16px;z-index:1}
+#reveal button{z-index:1}
+@keyframes pop{from{transform:scale(0) rotate(-90deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#strip{transition-duration:.01s!important}#boxanim.on,#reveal .big,#reveal .glow,.it.win{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Crate Rush</h1>
+  <div><span class="coins" id="coins">0</span> coins
+  <button class="ghost" id="free">+ Free coins</button></div>
+</header>
+<main>
+  <div class="boxes" id="boxes"></div>
+  <div id="stage">
+    <div id="boxanim"></div>
+    <div id="view"><div id="strip"></div></div>
+    <div id="result">Pick a box and press Open.</div>
+    <button id="open">Open box</button>
+  </div>
+  <h2>Your inventory (<span id="count">0</span>)</h2>
+  <div id="inv"></div>
+</main>
+<div id="reveal"></div>
+<script>
+const RARITY = {
+  common:{c:"var(--common)",label:"Common"},
+  uncommon:{c:"var(--uncommon)",label:"Uncommon"},
+  rare:{c:"var(--rare)",label:"Rare"},
+  epic:{c:"var(--epic)",label:"Epic"},
+  legendary:{c:"var(--legendary)",label:"Legendary"},
+  godly:{c:"var(--godly)",label:"Godly"}
+};
+// Items: name, emoji, rarity, sell value. Edit freely!
+const ITEMS = [
+  ["Rusty Blade","🔪","common",10],["Wooden Club","🏏","common",12],["Dull Dagger","🗡️","common",14],
+  ["Steel Shiv","🔪","uncommon",40],["Hunter Axe","🪓","uncommon",50],
+  ["Frost Katana","⚔️","rare",150],["Storm Hammer","🔨","rare",180],
+  ["Void Scythe","🌙","epic",600],["Plasma Lance","⚡","epic",750],
+  ["Solar Greatsword","☀️","legendary",3000],["Dragon Fang","🐉","legendary",4000],
+  ["Cosmic Reaper","🌌","godly",20000],["Crown of Ruin","👑","godly",35000]
+].map(([name,icon,rarity,value])=>({name,icon,rarity,value}));
+
+// Each box: price and rarity weights (higher = more common)
+const BOXES = [
+  {id:"basic",name:"Basic Box",icon:"📦",price:30,color:"#9aa3b5",w:{common:70,uncommon:22,rare:7,epic:1,legendary:0,godly:0}},
+  {id:"rare",name:"Rare Box",icon:"🎁",price:160,color:"#3f8cff",w:{common:30,uncommon:35,rare:25,epic:8,legendary:2,godly:0}},
+  {id:"mythic",name:"Mythic Box",icon:"💎",price:1000,color:"#ff3d5a",w:{common:0,uncommon:20,rare:40,epic:28,legendary:10,godly:2}}
+];
+
+let state = {coins:500, inv:[]};
+try{const s=JSON.parse(localStorage.getItem("crateRush"));if(s&&typeof s.coins==="number")state=s}catch(e){}
+const save=()=>{try{localStorage.setItem("crateRush",JSON.stringify(state))}catch(e){}};
+
+let selected = BOXES[0], busy = false;
+const $ = id => document.getElementById(id);
+
+function roll(box){
+  const entries = ITEMS.map(it=>({it,w:box.w[it.rarity]/ITEMS.filter(x=>x.rarity===it.rarity).length}));
+  let total = entries.reduce((a,e)=>a+e.w,0), r = Math.random()*total;
+  for(const e of entries){ if((r-=e.w)<0) return e.it; }
+  return entries[0].it;
+}
+function oddsText(box){
+  const t = Object.values(box.w).reduce((a,b)=>a+b,0);
+  return Object.entries(box.w).filter(([,v])=>v>0).map(([k,v])=>RARITY[k].label+" "+(v/t*100).toFixed(0)+"%").join(", ");
+}
+function cardHTML(it,cls){
+  return `<div class="${cls}" style="--c:${RARITY[it.rarity].c}"><span>${it.icon}</span>${it.name}</div>`;
+}
+function renderBoxes(){
+  $("boxes").innerHTML = "";
+  BOXES.forEach(b=>{
+    const d = document.createElement("div");
+    d.className = "box"+(b===selected?" sel":"");
+    d.style.setProperty("--c",b.color);
+    d.innerHTML = `<div class="ico">${b.icon}</div><h3>${b.name}</h3><small>${b.price.toLocaleString()} coins</small><div class="odds">${oddsText(b)}</div>`;
+    const btn = document.createElement("button");
+    btn.textContent = b===selected?"Selected":"Select";
+    btn.className = "ghost";
+    btn.onclick = ()=>{ if(!busy){selected=b;renderBoxes()} };
+    d.appendChild(btn);
+    $("boxes").appendChild(d);
+  });
+  if(!busy) fillIdle();
+  $("open").textContent = "Open "+selected.name+" ("+selected.price.toLocaleString()+")";
+}
+function renderInv(){
+  $("coins").textContent = state.coins.toLocaleString();
+  $("count").textContent = state.inv.length;
+  $("inv").innerHTML = "";
+  state.inv.forEach((it,i)=>{
+    const d = document.createElement("div");
+    d.className = "inv"; d.style.setProperty("--c",RARITY[it.rarity].c);
+    d.innerHTML = `<span>${it.icon}</span>${it.name}<br><small>${RARITY[it.rarity].label}</small><br>`;
+    const b = document.createElement("button");
+    b.textContent = "Sell "+it.value.toLocaleString();
+    b.className = "ghost";
+    b.onclick = ()=>{ if(busy)return; state.coins+=it.value; state.inv.splice(i,1); save(); renderInv(); };
+    d.appendChild(b);
+    $("inv").appendChild(d);
+  });
+  $("open").disabled = busy || state.coins < selected.price;
+  save();
+}
+
+let audio;
+function tick(freq,dur,vol){
+  try{
+    audio = audio || new (window.AudioContext||window.webkitAudioContext)();
+    const o=audio.createOscillator(), g=audio.createGain();
+    o.frequency.value=freq; o.type="square"; g.gain.value=vol;
+    g.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+dur);
+    o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime+dur);
+  }catch(e){}
+}
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+function fillIdle(){
+  const strip=$("strip");
+  strip.style.transform="translateX(0)";
+  strip.innerHTML = Array.from({length:14},()=>cardHTML(roll(selected),"it")).join("");
+}
+
+async function open(){
+  if(busy || state.coins < selected.price) return;
+  busy = true;
+  state.coins -= selected.price;
+  const N = 80, W = 128;
+  const WIN = 62 + Math.floor(Math.random()*8);   // roughly where it stops; the item is NOT chosen yet
+  const strip = $("strip"), view = $("view");
+  renderInv();
+  $("result").textContent = "Rolling...";
+
+  const rolled = [];
+  for(let i=0;i<N;i++) rolled.push(roll(selected));
+  strip.style.transform = "translateX(0)";
+  strip.innerHTML = rolled.map(it=>cardHTML(it,"it")).join("");
+  const cards = strip.children;
+  const center = view.clientWidth/2;
+  const jitter = (Math.random()-0.5)*90;           // stops anywhere inside the card
+  const target = -(WIN*W + 8 + 60) + center + jitter;
+  const T = matchMedia("(prefers-reduced-motion: reduce)").matches ? 600 : 5000;
+  const ease = p => 1 - Math.pow(1-p, 2);          // steadier spin, slows near the end
+
+  let last = -1;
+  await new Promise(done=>{
+    const t0 = performance.now();
+    (function frame(now){
+      const p = Math.min(1,(now-t0)/T);
+      const x = target*ease(p);
+      strip.style.transform = "translate3d("+x+"px,0,0)";
+      const idx = Math.floor((center - x - 8)/W);
+      if(idx !== last && rolled[idx]){
+        tick(480+(idx%4)*50,.05,.05);
+        $("result").innerHTML = `<b style="color:${RARITY[rolled[idx].rarity].c}">${rolled[idx].name}</b>`;
+        last = idx;
+      }
+      if(p<1) requestAnimationFrame(frame); else done();
+    })(t0);
+  });
+
+  // The prize is whatever card is under the marker when it stops
+  const landed = Math.max(0, Math.min(N-1, Math.floor((center - target - 8)/W)));
+  const prize = rolled[landed];
+  for(let i=0;i<cards.length;i++) if(i!==landed) cards[i].classList.add("dim");
+  cards[landed].classList.add("win");
+  state.inv.push(prize);
+  save();
+  const hi = ["epic","legendary","godly"].includes(prize.rarity);
+  tick(hi?880:660,.25,.12); if(hi){ setTimeout(()=>tick(1100,.3,.12),150); }
+  await sleep(1400);
+
+  const R = RARITY[prize.rarity];
+  const rv = $("reveal");
+  rv.style.setProperty("--c",R.c);
+  rv.innerHTML = `<div class="glow"></div><div class="big">${prize.icon}</div><div class="rar">${R.label}</div><div class="nm">${prize.name} &middot; worth ${prize.value.toLocaleString()}</div><button id="ok">Nice!</button>`;
+  rv.classList.add("on");
+  $("ok").focus();
+  $("ok").onclick = ()=>{
+    rv.classList.remove("on");
+    busy = false;
+    $("result").innerHTML = `You got <b style="color:${R.c}">${prize.name}</b> (${R.label})!`;
+    fillIdle();
+    renderInv();
+  };
+}
+
+$("open").onclick = open;
+$("free").onclick = ()=>{ if(!busy){state.coins+=50; renderInv();} };
+renderBoxes(); renderInv();
+</script>
+</body>
+</html>

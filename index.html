@@ -192,7 +192,7 @@ async function open(){
   const center = view.clientWidth/2;
   const jitter = (Math.random()-0.5)*90;           // stops anywhere inside the card
   const target = -(WIN*W + 8 + 60) + center + jitter;
-  const T = matchMedia("(prefers-reduced-motion: reduce)").matches ? 2500 : 6600;
+  const T = matchMedia("(prefers-reduced-motion: reduce)").matches ? 3500 : 6600;
   const ease = p => 1 - Math.pow(1-p, 2);          // steadier spin, slows near the end
 
   let last = -1;
